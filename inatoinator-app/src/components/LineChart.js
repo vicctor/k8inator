@@ -3,7 +3,7 @@ import { Line } from "react-chartjs-2";
 
 function LineChart({ diagramLabel, chartData }) {
   return (
-    <div className="chart-container">
+    <div class="chart-container">
       <h3 style={{ textAlign: "center" }}>{diagramLabel}</h3>
       <Line
         data={chartData}

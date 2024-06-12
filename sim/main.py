@@ -8,12 +8,16 @@ import random
 from flask import Flask, request, jsonify, app, send_from_directory
 
 @dataclass
+class PodStats:
+    id: int
+    cpu: int
+    memory: int
+
+@dataclass
 class Sample:
     successes: int
     failures: int
-    pods: List[int]
-    pod_mem: Dict[int, int]
-    pod_cpu: Dict[int, int]
+    pods: List[PodStats]
 
 # Klasa reprezentująca pojedynczy pod
 class Pod:
@@ -48,18 +52,23 @@ class Pod:
 # Klasa reprezentująca klaster szkółkarski
 class KubernetesCluster:
     def __init__(self, env, pod_cpu_limit, pod_memory_limit, total_pods, network_limit, scaling_time):
+        self.next_pod_id = 0
         self.env = env
         self.pod_cpu_limit = pod_cpu_limit
         self.pod_memory_limit = pod_memory_limit
         self.total_pods = total_pods
         self.network = simpy.Container(env, capacity=network_limit, init=network_limit)
-        self.pods = [Pod(env, f"Pod-{i}", pod_cpu_limit, pod_memory_limit, self, i) for i in range(total_pods)]
+        self.pods = [Pod(env, f"Pod-{self._next_pod_id()}", pod_cpu_limit, pod_memory_limit, self, self._next_pod_id()) for i in range(total_pods)]
         self.scaling_time = scaling_time
         self.scaling_in_progress = False
         self.requests_handled = 0  # Number of handled requests
         self.successful_requests = 0  # Number of successfully handled requests
         self.rejected_requests = 0  # Number of rejected requests
         self.samples = []
+    
+    def _next_pod_id(self):
+        self.next_pod_id = self.next_pod_id + 1
+        return self.next_pod_id
 
     def log_stats(self):
 
@@ -70,9 +79,7 @@ class KubernetesCluster:
                 f"  {pod.name} - CPU: {pod.cpu.level}/{pod.cpu.capacity}, Memory: {pod.memory.level}/{pod.memory.capacity}")
         sample = Sample(successes=self.successful_requests,
                         failures=self.rejected_requests,
-                        pods=[p.id for p in self.pods],
-                        pod_mem= {p.id:p.memory.level for p in self.pods},
-                        pod_cpu= {p.id:p.cpu.level for p in self.pods})
+                        pods=[PodStats(p.id, p.cpu.level, p.memory.level) for p in self.pods])
         self.samples.append(sample)
 
     def handle_request(self, memory_demand, cpu_demand, network_demand, request_duration, network_latency):
@@ -113,8 +120,8 @@ class KubernetesCluster:
         # Symulacja czasu potrzebnego na uruchomienie nowego poda
         print(f"{self.env.now}: Scaling up...")  # Debug print
         yield self.env.timeout(self.scaling_time)
-        new_pod_id = len(self.pods)
-        new_pod = Pod(self.env, f"Pod-{new_pod_id}", self.pod_cpu_limit, self.pod_memory_limit, self, new_pod_id)
+        
+        new_pod = Pod(self.env, f"Pod-{self._next_pod_id()}", self.pod_cpu_limit, self.pod_memory_limit, self, self._next_pod_id())
         self.pods.append(new_pod)
         self.scaling_in_progress = False
         print(f"{self.env.now}: New pod {new_pod.name} added after scaling")

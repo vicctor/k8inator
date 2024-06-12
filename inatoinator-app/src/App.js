@@ -16,7 +16,7 @@ import GaugeControl from './components/GaugeControl';
 Chart.register(CategoryScale);
 
 const simulateKubernetes = async (onData, params={}) => {
-  const url = 'http://localhost:5000/simulate';
+  const url = '/simulate';
   
   try {
     const response = await axios.post(url, params);    
@@ -57,14 +57,22 @@ function App() {
         borderColor: "black",
         borderWidth: 0,
         pointBorderWidth: 0.1,
-        pointRadius: 0.5,
+        pointRadius: 0.9,
       }
     ]
+  }
+
+  const statsLineTemplate = {
+    pointBorderWidth: 0.1,
+    pointRadius: 0.9
   }
 
   const [failuresData, setFailuresData] = useState({...datasetTemplate});
   const [successesData, setSuccessesData] = useState({...datasetTemplate});
   const [errorrateData, setErrorrateData] = useState({...datasetTemplate});
+  const [podsCountData, setPodsCountData] = useState({...datasetTemplate});
+  const [podsMemData, setPodsMemData] = useState({...datasetTemplate});
+  const [podsCpuData, setPodsCpuData] = useState({...datasetTemplate});
 
   const handleGaugeChange = (parameter, value) => {
     requestBody[parameter] = parseInt(value); 
@@ -77,6 +85,29 @@ function App() {
           setFailuresData({...failuresData, labels: x, datasets: [{ ...failuresData.datasets[0], data: y }], });
           setSuccessesData({...successesData, labels: x, datasets: [{ ...successesData.datasets[0], data: data.map((d) => d.successes) }],});
           setErrorrateData({...errorrateData, labels: x, datasets: [{ ...errorrateData.datasets[0], data: data.map((d) => (d.failures / Math.max(1, d.successes)) * 100) } ],});
+          setPodsCountData({...podsCountData, labels: x, datasets: [{ ...successesData.datasets[0], data: data.map((d) => d.pods.length) }],});
+
+          var memDatasets = {}
+          data.map((d, t) => d.pods.map((pod) => {
+            if (memDatasets[pod.id] === undefined) {
+              // table of 0 of length t
+              var zeros = Array.from({ length: t }, (_, i) => 0)
+              memDatasets[pod.id] = {...statsLineTemplate, label: pod.id, data: zeros}
+            }
+            memDatasets[pod.id].data.push(pod.memory)
+          }))
+          setPodsMemData({...podsMemData, labels: x, datasets: Object.values(memDatasets),});
+
+
+          var cpuDatasets = {}
+          data.map((d, t) => d.pods.map((pod) => {
+            if (cpuDatasets[pod.id] === undefined) {
+              var zeros = Array.from({ length: t }, (_, i) => 0)
+              cpuDatasets[pod.id] = {...statsLineTemplate, label: pod.id, data: zeros}
+            }
+            cpuDatasets[pod.id].data.push(pod.cpu)
+          }))
+          setPodsCpuData({...podsCpuData, labels: x, datasets: Object.values(cpuDatasets),});
       },
       requestBody
     );   
@@ -122,6 +153,9 @@ function App() {
       <LineChart diagramLabel="failures sum" chartData={failuresData} />          
       <LineChart diagramLabel="successes sum" chartData={successesData} />          
       <LineChart diagramLabel="error rate" chartData={errorrateData} />          
+      <LineChart diagramLabel="cluster size" chartData={podsCountData} />          
+      <LineChart diagramLabel="pods mem" chartData={podsMemData} />          
+      <LineChart diagramLabel="pods cpu" chartData={podsCpuData} />          
       </div>
       
     </div>
